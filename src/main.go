@@ -1,35 +1,46 @@
 package main
 
 import (
-	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"strconv"
 )
 
 var buttons [9]*widget.Button
 var state = [3][3]uint{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}}
-var flag bool
-var winState bool
+var lockBoard, winState, flag bool
+var counterWin1Player, counterWin2Player int
+var label1Player, label2Player *widget.Label
 
 func main() {
 	a := app.New()
 	w := a.NewWindow("TikTakToe")
 	w.Resize(fyne.NewSize(300, 300))
 
+	line0 := initTopBarMenu()
+	line1, line2, line3 := initPlayBoard(w)
+
+	content := container.NewGridWithRows(4, line0, line1, line2, line3)
+
+	w.SetContent(content)
+	w.ShowAndRun()
+}
+
+func initPlayBoard(window fyne.Window) (*fyne.Container, *fyne.Container, *fyne.Container) {
 	for i := 0; i < 9; i++ {
 		x, y := getPositionInMatrix(i)
 		var button *widget.Button
 		button = widget.NewButton("", func() {
-			x1, y1 := x, y
-			sta := changeState(x1, y1)
-			fmt.Println(x1, y1)
-			button.SetText(sta)
-			check(w)
+			checkState, sta := changeState(x, y)
+			if checkState && !lockBoard {
+				button.SetText(sta)
+				check(window)
+			}
+			//fmt.Println(x, y)
 		})
-
 		buttons[i] = button
 	}
 
@@ -37,10 +48,24 @@ func main() {
 	line2 := container.NewGridWithColumns(3, buttons[3], buttons[4], buttons[5])
 	line3 := container.NewGridWithColumns(3, buttons[6], buttons[7], buttons[8])
 
-	content := container.NewGridWithRows(3, line1, line2, line3)
+	return line1, line2, line3
+}
 
-	w.SetContent(content)
-	w.ShowAndRun()
+func initTopBarMenu() *fyne.Container {
+	label1Player = widget.NewLabel(strconv.Itoa(counterWin1Player))
+	label2Player = widget.NewLabel(strconv.Itoa(counterWin2Player))
+
+	line0 := container.NewGridWithColumns(3, container.NewGridWithRows(2, widget.NewLabel("1 Игрок"), label1Player),
+		container.NewGridWithRows(2, widget.NewButton("Сброс", func() {
+			counterWin1Player = 0
+			counterWin2Player = 0
+			label1Player.SetText("0")
+			label2Player.SetText("0")
+		}), widget.NewButton("Заново", func() {
+			restart()
+		})), container.NewGridWithRows(2, widget.NewLabel("2 Игрок"), label2Player))
+
+	return line0
 }
 
 func getPositionInMatrix(pos int) (x int, y int) {
@@ -50,122 +75,79 @@ func getPositionInMatrix(pos int) (x int, y int) {
 	return x, y
 }
 
-func changeState(x int, y int) (st string) {
+func changeState(x int, y int) (checkState bool, st string) {
 	if state[x][y] != 0 {
-		if state[x][y] == 1 {
-			return "O"
-		} else {
-			return "X"
-		}
+		return false, ""
 	}
-
 	if flag {
 		flag = !flag
 		state[x][y] = 1
-		return "O"
+		return true, "O"
 	} else {
 		flag = !flag
 		state[x][y] = 2
-		return "X"
+		return true, "X"
 	}
 }
 
 func check(window fyne.Window) {
-	checkLeftColumn(window)
-	checkMiddleColumn(window)
-	checkRightColumn(window)
-	checkTopRow(window)
-	checkMiddleRow(window)
-	checkBottomRow(window)
-	checkMainDiagonal(window)
-	checkSecondDiagonal(window)
-	checkAallDesk(window)
+	checkColumns(window)
+	checkRows(window)
+	checkDiagonals(window)
+	checkAllDesk(window)
 }
 
-func checkLeftColumn(window fyne.Window) bool {
-	if state[0][0] == state[0][1] && state[0][0] == state[0][2] && state[0][0] != 0 && state[0][1] != 0 && state[0][2] != 0 {
-		if state[0][0] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
-		}
-		return true
-	}
-
-	return false
-}
-
-func checkMiddleColumn(window fyne.Window) {
-	if state[1][0] == state[1][1] && state[1][0] == state[1][2] && state[1][0] != 0 && state[1][1] != 0 && state[1][2] != 0 {
-		if state[1][0] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
+func checkColumns(window fyne.Window) {
+	for i := 0; i < 3; i++ {
+		if state[i][0] == state[i][1] && state[i][0] == state[i][2] && state[i][0] != 0 && state[i][1] != 0 && state[i][2] != 0 {
+			endGame(true, state[0][i] == 1, window)
 		}
 	}
 }
 
-func checkRightColumn(window fyne.Window) {
-	if state[2][0] == state[2][1] && state[2][0] == state[2][2] && state[2][0] != 0 && state[2][1] != 0 && state[2][2] != 0 {
-		if state[2][0] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
+func checkRows(window fyne.Window) {
+	for i := 0; i < 3; i++ {
+		if state[0][i] == state[1][i] && state[0][i] == state[2][i] && state[0][i] != 0 && state[1][i] != 0 && state[2][i] != 0 {
+			endGame(true, state[0][i] == 1, window)
 		}
 	}
 }
 
-func checkTopRow(window fyne.Window) {
-	if state[0][0] == state[1][0] && state[0][0] == state[2][0] && state[0][0] != 0 && state[1][0] != 0 && state[2][0] != 0 {
-		if state[0][0] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
+func checkDiagonals(window fyne.Window) {
+	for i := 0; i <= 2; i += 2 {
+		if state[0][i] == state[1][1] && state[0][i] == state[2][2-i] && state[0][i] != 0 && state[1][1] != 0 && state[2][2-i] != 0 {
+			endGame(true, state[0][i] == 1, window)
 		}
 	}
 }
 
-func checkMiddleRow(window fyne.Window) {
-	if state[0][1] == state[1][1] && state[0][1] == state[2][1] && state[0][1] != 0 && state[1][1] != 0 && state[2][1] != 0 {
-		if state[0][1] == 1 {
-			secondWin(window)
+func endGame(status bool, player bool, window fyne.Window) {
+	var msg string
+	if status {
+		if player {
+			counterWin2Player++
+			label2Player.SetText(strconv.Itoa(counterWin2Player))
+			msg = "Победа 2 игрока"
 		} else {
-			firstWin(window)
+			counterWin1Player++
+			label1Player.SetText(strconv.Itoa(counterWin1Player))
+			msg = "Победа 1 игрока"
 		}
+	} else {
+		msg = "Ничья"
 	}
+
+	dialog.ShowConfirm("Игра окончена", msg+"\nначать заново?", func(b bool) {
+		if b != true {
+			lockBoard = true
+		} else {
+			restart()
+		}
+	}, window)
+	winState = true
 }
 
-func checkBottomRow(window fyne.Window) {
-	if state[0][2] == state[1][2] && state[0][2] == state[2][2] && state[0][2] != 0 && state[1][2] != 0 && state[2][2] != 0 {
-		if state[0][2] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
-		}
-	}
-}
-
-func checkMainDiagonal(window fyne.Window) {
-	if state[0][0] == state[1][1] && state[0][0] == state[2][2] && state[0][0] != 0 && state[1][1] != 0 && state[2][2] != 0 {
-		if state[0][0] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
-		}
-	}
-}
-
-func checkSecondDiagonal(window fyne.Window) {
-	if state[0][2] == state[1][1] && state[0][2] == state[2][0] && state[0][2] != 0 && state[1][1] != 0 && state[2][0] != 0 {
-		if state[0][2] == 1 {
-			secondWin(window)
-		} else {
-			firstWin(window)
-		}
-	}
-}
-
-func checkAallDesk(window fyne.Window) {
+func checkAllDesk(window fyne.Window) {
 	counter := 0
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
@@ -178,44 +160,12 @@ func checkAallDesk(window fyne.Window) {
 	}
 
 	if counter == 9 && !winState {
-		draw(window)
+		endGame(false, false, window)
 	}
 }
 
-func draw(window fyne.Window) {
-	dialog.ShowConfirm("Игра окончена", "Ничья \nНачать заново?", func(b bool) {
-		if b != true {
-			return
-		} else {
-			restart()
-		}
-	}, window)
-}
-
-func firstWin(window fyne.Window) {
-	dialog.ShowConfirm("Игра окончена", "Победа 1 игрока \nНачать заново?", func(b bool) {
-		if b != true {
-			return
-		} else {
-			restart()
-		}
-	}, window)
-	winState = true
-}
-
-func secondWin(window fyne.Window) {
-	dialog.ShowConfirm("Игра окончена", "Победа 2 игрока \nНачать заново?", func(b bool) {
-		if b != true {
-			return
-		} else {
-			restart()
-		}
-	}, window)
-	winState = true
-}
-
 func restart() {
-	winState = false
+	winState, flag, lockBoard = false, false, false
 
 	for _, i := range buttons {
 		i.SetText("")
