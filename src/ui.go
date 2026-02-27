@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -13,15 +14,16 @@ import (
 type TicTacToeUI struct {
 	game    *Game
 	window  fyne.Window
-	buttons [9]*widget.Button
+	buttons [3][3][3][3]*widget.Button
 	scoreX  *widget.Label
 	scoreO  *widget.Label
+	status  *widget.Label
 }
 
 func NewTicTacToeUI() *TicTacToeUI {
 	a := app.New()
-	w := a.NewWindow("TikTakToe")
-	w.Resize(fyne.NewSize(300, 300))
+	w := a.NewWindow("Ultimate Tic-Tac-Toe")
+	w.Resize(fyne.NewSize(500, 500))
 
 	ui := &TicTacToeUI{
 		game:   NewGame(),
@@ -35,8 +37,13 @@ func NewTicTacToeUI() *TicTacToeUI {
 func (ui *TicTacToeUI) setupContent() {
 	topBar := ui.initTopBar()
 	board := ui.initPlayBoard()
+	ui.status = widget.NewLabel("Ход игрока X")
 
-	content := container.NewGridWithRows(4, topBar, board[0], board[1], board[2])
+	content := container.NewBorder(
+		container.NewVBox(topBar, ui.status),
+		nil, nil, nil,
+		board,
+	)
 	ui.window.SetContent(content)
 }
 
@@ -54,67 +61,131 @@ func (ui *TicTacToeUI) initTopBar() *fyne.Container {
 	)
 }
 
-func (ui *TicTacToeUI) initPlayBoard() [3]*fyne.Container {
-	for i := 0; i < 9; i++ {
-		idx := i
-		row, col := i/3, i%3
-		ui.buttons[idx] = widget.NewButton("", func() {
-			ui.handleMove(idx, row, col)
-		})
+func (ui *TicTacToeUI) initPlayBoard() *fyne.Container {
+	bigGrid := container.NewGridWithColumns(3)
+
+	for br := 0; br < 3; br++ {
+		for bc := 0; bc < 3; bc++ {
+			smallGrid := container.NewGridWithColumns(3)
+			for sr := 0; sr < 3; sr++ {
+				for sc := 0; sc < 3; sc++ {
+					bRow, bCol, sRow, sCol := br, bc, sr, sc
+					btn := widget.NewButton("", func() {
+						ui.handleMove(bRow, bCol, sRow, sCol)
+					})
+					ui.buttons[br][bc][sr][sc] = btn
+					smallGrid.Add(btn)
+				}
+			}
+
+			card := widget.NewCard("", "", smallGrid)
+			bigGrid.Add(card)
+		}
 	}
 
-	return [3]*fyne.Container{
-		container.NewGridWithColumns(3, ui.buttons[0], ui.buttons[1], ui.buttons[2]),
-		container.NewGridWithColumns(3, ui.buttons[3], ui.buttons[4], ui.buttons[5]),
-		container.NewGridWithColumns(3, ui.buttons[6], ui.buttons[7], ui.buttons[8]),
-	}
+	return bigGrid
 }
 
-func (ui *TicTacToeUI) handleMove(idx, row, col int) {
-	symbol, ok := ui.game.Play(row, col)
+func (ui *TicTacToeUI) handleMove(br, bc, sr, sc int) {
+	symbol, ok := ui.game.Play(br, bc, sr, sc)
 	if !ok {
 		return
 	}
 
-	ui.buttons[idx].SetText(symbol)
+	ui.buttons[br][bc][sr][sc].SetText(symbol)
+	ui.updateBoardState()
 	ui.checkGameState()
 }
 
+func (ui *TicTacToeUI) updateBoardState() {
+	player := ui.game.CurrentPlayer()
+	ui.status.SetText(fmt.Sprintf("Ход игрока %s", player.String()))
+
+	for br := 0; br < 3; br++ {
+		for bc := 0; bc < 3; bc++ {
+			board := ui.game.Boards[br][bc]
+			isPossibleBoard := ui.game.NextBigRow == -1 || (br == ui.game.NextBigRow && bc == ui.game.NextBigCol)
+
+			for sr := 0; sr < 3; sr++ {
+				for sc := 0; sc < 3; sc++ {
+					btn := ui.buttons[br][bc][sr][sc]
+
+					switch {
+					case board.Winner != None:
+						btn.SetText(board.Winner.String())
+						btn.Disable()
+					case board.Cells[sr][sc] != None, !isPossibleBoard:
+						btn.Disable()
+					default:
+						btn.Enable()
+					}
+
+					if isPossibleBoard && board.Winner == None && !ui.game.IsGameOver {
+						btn.Importance = widget.HighImportance
+					} else {
+						btn.Importance = widget.MediumImportance
+					}
+					btn.Refresh()
+				}
+			}
+		}
+	}
+}
+
 func (ui *TicTacToeUI) checkGameState() {
-	hasWinner, winner, isDraw := ui.game.CheckWin()
-	if !hasWinner && !isDraw {
+	won, winner := ui.game.CheckBigWin()
+	if !won && !ui.isDraw() {
 		return
 	}
 
 	var msg string
-	if hasWinner {
+	if won {
 		if winner == PlayerX {
 			ui.game.ScoreX++
 			ui.scoreX.SetText(strconv.Itoa(ui.game.ScoreX))
-			msg = "Победа игрока X. "
+			msg = "Победа игрока X во всей игре! "
 		} else {
 			ui.game.ScoreO++
 			ui.scoreO.SetText(strconv.Itoa(ui.game.ScoreO))
-			msg = "Победа игрока O. "
+			msg = "Победа игрока O во всей игре! "
 		}
 	} else {
-		msg = "Ничья. "
+		msg = "Ничья в игре! "
 	}
 
 	dialog.ShowConfirm("Игра окончена", msg+"Начать заново?", func(b bool) {
 		if b {
 			ui.restartGame()
-		} else {
-			ui.game.LockBoard = true
 		}
 	}, ui.window)
 }
 
+func (ui *TicTacToeUI) isDraw() bool {
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 3; c++ {
+			if ui.game.Boards[r][c].Winner == None && !ui.game.Boards[r][c].IsFull {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (ui *TicTacToeUI) restartGame() {
 	ui.game.Restart()
-	for _, btn := range ui.buttons {
-		btn.SetText("")
+	for br := 0; br < 3; br++ {
+		for bc := 0; bc < 3; bc++ {
+			for sr := 0; sr < 3; sr++ {
+				for sc := 0; sc < 3; sc++ {
+					btn := ui.buttons[br][bc][sr][sc]
+					btn.SetText("")
+					btn.Enable()
+					btn.Importance = widget.MediumImportance
+				}
+			}
+		}
 	}
+	ui.status.SetText("Ход игрока X")
 }
 
 func (ui *TicTacToeUI) resetScores() {

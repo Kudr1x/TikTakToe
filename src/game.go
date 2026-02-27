@@ -19,22 +19,36 @@ func (p Player) String() string {
 	}
 }
 
+type SmallBoard struct {
+	Cells  [3][3]Player
+	Winner Player
+	IsFull bool
+}
+
 type Game struct {
-	Board         [3][3]Player
+	Boards        [3][3]SmallBoard
+	BigWinner     Player
 	IsPlayerOTurn bool
-	LockBoard     bool
+	NextBigRow    int // -1 означает свободный ход в любом квадрате
+	NextBigCol    int // -1 означает свободный ход в любом квадрате
 	ScoreX        int
 	ScoreO        int
+	IsGameOver    bool
 }
 
 func NewGame() *Game {
-	return &Game{}
+	g := &Game{}
+	g.Restart()
+	return g
 }
 
 func (g *Game) Restart() {
-	g.Board = [3][3]Player{}
+	g.Boards = [3][3]SmallBoard{}
+	g.BigWinner = None
 	g.IsPlayerOTurn = false
-	g.LockBoard = false
+	g.NextBigRow = -1
+	g.NextBigCol = -1
+	g.IsGameOver = false
 }
 
 func (g *Game) ResetScore() {
@@ -49,45 +63,85 @@ func (g *Game) CurrentPlayer() Player {
 	return PlayerX
 }
 
-func (g *Game) Play(row, col int) (symbol string, ok bool) {
-	if g.LockBoard || row < 0 || row > 2 || col < 0 || col > 2 || g.Board[row][col] != None {
+func (g *Game) Play(bigRow, bigCol, smallRow, smallCol int) (symbol string, ok bool) {
+	if g.IsGameOver {
+		return "", false
+	}
+
+	if g.NextBigRow != -1 && (bigRow != g.NextBigRow || bigCol != g.NextBigCol) {
+		return "", false
+	}
+
+	targetBoard := &g.Boards[bigRow][bigCol]
+
+	if targetBoard.Winner != None || targetBoard.Cells[smallRow][smallCol] != None {
 		return "", false
 	}
 
 	currentPlayer := g.CurrentPlayer()
-	g.Board[row][col] = currentPlayer
-	g.IsPlayerOTurn = !g.IsPlayerOTurn
+	targetBoard.Cells[smallRow][smallCol] = currentPlayer
+	symbol = currentPlayer.String()
 
-	return currentPlayer.String(), true
+	if won, winner := checkLine(targetBoard.Cells); won {
+		targetBoard.Winner = winner
+	} else if isBoardFull(targetBoard.Cells) {
+		targetBoard.IsFull = true
+	}
+
+	if won, winner := g.CheckBigWin(); won {
+		g.BigWinner = winner
+		g.IsGameOver = true
+	}
+
+	nextBoard := &g.Boards[smallRow][smallCol]
+	if nextBoard.Winner != None || nextBoard.IsFull {
+		g.NextBigRow = -1
+		g.NextBigCol = -1
+	} else {
+		g.NextBigRow = smallRow
+		g.NextBigCol = smallCol
+	}
+
+	g.IsPlayerOTurn = !g.IsPlayerOTurn
+	return symbol, true
 }
 
-func (g *Game) CheckWin() (hasWinner bool, winner Player, isDraw bool) {
+func checkLine(board [3][3]Player) (bool, Player) {
 	lines := [8][3][2]int{
-		// Rows
 		{{0, 0}, {0, 1}, {0, 2}}, {{1, 0}, {1, 1}, {1, 2}}, {{2, 0}, {2, 1}, {2, 2}},
-		// Cols
 		{{0, 0}, {1, 0}, {2, 0}}, {{0, 1}, {1, 1}, {2, 1}}, {{0, 2}, {1, 2}, {2, 2}},
-		// Diagonals
 		{{0, 0}, {1, 1}, {2, 2}}, {{0, 2}, {1, 1}, {2, 0}},
 	}
 
 	for _, line := range lines {
-		p1 := g.Board[line[0][0]][line[0][1]]
-		p2 := g.Board[line[1][0]][line[1][1]]
-		p3 := g.Board[line[2][0]][line[2][1]]
+		p1 := board[line[0][0]][line[0][1]]
+		p2 := board[line[1][0]][line[1][1]]
+		p3 := board[line[2][0]][line[2][1]]
 
 		if p1 != None && p1 == p2 && p2 == p3 {
-			return true, p1, false
+			return true, p1
 		}
 	}
+	return false, None
+}
 
+func isBoardFull(board [3][3]Player) bool {
 	for r := 0; r < 3; r++ {
 		for c := 0; c < 3; c++ {
-			if g.Board[r][c] == None {
-				return false, None, false
+			if board[r][c] == None {
+				return false
 			}
 		}
 	}
+	return true
+}
 
-	return false, None, true
+func (g *Game) CheckBigWin() (bool, Player) {
+	var bigState [3][3]Player
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 3; c++ {
+			bigState[r][c] = g.Boards[r][c].Winner
+		}
+	}
+	return checkLine(bigState)
 }

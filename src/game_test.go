@@ -9,97 +9,57 @@ func TestNewGame(t *testing.T) {
 	if g.CurrentPlayer() != PlayerX {
 		t.Error("Expected Player X to start first")
 	}
-	for r := 0; r < 3; r++ {
-		for c := 0; c < 3; c++ {
-			if g.Board[r][c] != None {
-				t.Errorf("Expected empty board at [%d][%d]", r, c)
-			}
-		}
-	}
 }
 
-func TestPlay(t *testing.T) {
+func TestUltimatePlay(t *testing.T) {
 	g := NewGame()
 
-	// Test valid move
-	symbol, ok := g.Play(0, 0)
+	symbol, ok := g.Play(1, 1, 1, 1)
 	if !ok || symbol != "X" {
 		t.Errorf("Expected valid move for X, got %v, %s", ok, symbol)
 	}
-	if g.Board[0][0] != PlayerX {
-		t.Error("Board at [0][0] should be PlayerX")
+
+	if g.NextBigRow != 1 || g.NextBigCol != 1 {
+		t.Errorf("Expected NextBig to be [1,1], got [%d,%d]", g.NextBigRow, g.NextBigCol)
 	}
 
-	// Test move to occupied cell
-	symbol, ok = g.Play(0, 0)
-	if ok || symbol != "" {
-		t.Error("Should not allow move to occupied cell")
+	_, ok = g.Play(0, 0, 0, 0)
+	if ok {
+		t.Error("Should not allow move outside of the target big board")
 	}
 
-	// Test next turn
-	symbol, ok = g.Play(1, 1)
+	symbol, ok = g.Play(1, 1, 0, 0)
 	if !ok || symbol != "O" {
-		t.Errorf("Expected valid move for O, got %v, %s", ok, symbol)
+		t.Errorf("Expected valid move for O in [1,1][0,0], got %v, %s", ok, symbol)
 	}
-	if g.Board[1][1] != PlayerO {
-		t.Error("Board at [1][1] should be PlayerO")
+
+	if g.NextBigRow != 0 || g.NextBigCol != 0 {
+		t.Errorf("Expected NextBig to be [0,0], got [%d,%d]", g.NextBigRow, g.NextBigCol)
 	}
 }
 
-func TestCheckWin(t *testing.T) {
-	tests := []struct {
-		name      string
-		moves     [][2]int // sequence of moves (row, col)
-		hasWinner bool
-		winner    Player
-		isDraw    bool
-	}{
-		{
-			name:      "Row Win (First)",
-			moves:     [][2]int{{0, 0}, {1, 0}, {0, 1}, {1, 1}, {0, 2}},
-			hasWinner: true,
-			winner:    PlayerX,
-		},
-		{
-			name:      "Column Win (First)",
-			moves:     [][2]int{{0, 0}, {0, 1}, {1, 0}, {1, 1}, {2, 0}},
-			hasWinner: true,
-			winner:    PlayerX,
-		},
-		{
-			name:      "Diagonal Win",
-			moves:     [][2]int{{0, 0}, {0, 1}, {1, 1}, {0, 2}, {2, 2}},
-			hasWinner: true,
-			winner:    PlayerX,
-		},
-		{
-			name: "Draw",
-			moves: [][2]int{
-				{0, 0}, {0, 1}, {0, 2},
-				{1, 1}, {1, 0}, {1, 2},
-				{2, 1}, {2, 0}, {2, 2},
-			},
-			hasWinner: false,
-			isDraw:    true,
-		},
-	}
+func TestSmallBoardWin(t *testing.T) {
+	g := NewGame()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewGame()
-			for _, move := range tt.moves {
-				g.Play(move[0], move[1])
-			}
-			hasWinner, winner, isDraw := g.CheckWin()
-			if hasWinner != tt.hasWinner {
-				t.Errorf("hasWinner: expected %v, got %v", tt.hasWinner, hasWinner)
-			}
-			if winner != tt.winner {
-				t.Errorf("winner: expected %v, got %v", tt.winner, winner)
-			}
-			if isDraw != tt.isDraw {
-				t.Errorf("isDraw: expected %v, got %v", tt.isDraw, isDraw)
-			}
-		})
+	g.Boards[0][0].Cells[0][0] = PlayerX
+	g.Boards[0][0].Cells[0][1] = PlayerX
+	g.Boards[0][0].Cells[0][2] = PlayerX
+
+	won, winner := checkLine(g.Boards[0][0].Cells)
+	if !won || winner != PlayerX {
+		t.Errorf("Small board [0,0] should be won by X")
+	}
+}
+
+func TestBigWin(t *testing.T) {
+	g := NewGame()
+
+	g.Boards[0][0].Winner = PlayerX
+	g.Boards[0][1].Winner = PlayerX
+	g.Boards[0][2].Winner = PlayerX
+
+	won, winner := g.CheckBigWin()
+	if !won || winner != PlayerX {
+		t.Errorf("Big win expected for X")
 	}
 }
