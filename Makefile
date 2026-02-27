@@ -6,4 +6,4 @@ test:
 	go test ./src/...
 
 build:
-	go build -o bin/tiktaktoe ./src/main.go
+	go build -o bin/tiktaktoe ./src
