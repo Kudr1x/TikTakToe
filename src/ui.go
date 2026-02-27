@@ -57,9 +57,9 @@ func (ui *TicTacToeUI) initTopBar() *fyne.Container {
 func (ui *TicTacToeUI) initPlayBoard() [3]*fyne.Container {
 	for i := 0; i < 9; i++ {
 		idx := i
-		x, y := i%3, i/3
+		row, col := i/3, i%3
 		ui.buttons[idx] = widget.NewButton("", func() {
-			ui.handleMove(idx, x, y)
+			ui.handleMove(idx, row, col)
 		})
 	}
 
@@ -70,8 +70,8 @@ func (ui *TicTacToeUI) initPlayBoard() [3]*fyne.Container {
 	}
 }
 
-func (ui *TicTacToeUI) handleMove(idx, x, y int) {
-	symbol, ok := ui.game.Play(x, y)
+func (ui *TicTacToeUI) handleMove(idx, row, col int) {
+	symbol, ok := ui.game.Play(row, col)
 	if !ok {
 		return
 	}
